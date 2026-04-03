@@ -6,20 +6,23 @@ No npm or Node.js required!
 
 import json
 import os
+import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-import threading
 import time
 
 DATA_FILE = 'lcl_data.json'
-PORT = 3000
+PORT = int(os.environ.get('PORT', 3000))
 
 def load_data():
     """Load data from file or create default"""
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    
+        try:
+            with open(DATA_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[WARN] Could not load {DATA_FILE}: {e} — using defaults", flush=True)
+
     return {
         "users": [
             {
@@ -63,46 +66,89 @@ save_data(current_data)
 
 class LCLHandler(SimpleHTTPRequestHandler):
     """HTTP Request Handler with API support"""
-    
+
     def do_GET(self):
         """Handle GET requests"""
-        if self.path == '/api/data':
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path == '/api/data':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             global current_data
             self.wfile.write(json.dumps(current_data).encode())
+            print(f"[{time.strftime('%H:%M:%S')}] GET /api/data -> 200", flush=True)
+        elif path == '/' or path == '':
+            # Explicitly serve index.html for the root path
+            self._serve_file('index.html', 'text/html')
         else:
-            # Serve static files
-            super().do_GET()
-    
+            # Serve other static files via SimpleHTTPRequestHandler
+            try:
+                super().do_GET()
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ERROR serving {path}: {e}", flush=True)
+                self._send_error(500, "Internal Server Error")
+
+    def _serve_file(self, filename, content_type):
+        """Serve a specific file by name from the working directory"""
+        filepath = os.path.join(os.getcwd(), filename)
+        if not os.path.exists(filepath):
+            print(f"[{time.strftime('%H:%M:%S')}] 404 {filename} not found at {filepath}", flush=True)
+            self._send_error(404, f"File not found: {filename}")
+            return
+        try:
+            with open(filepath, 'rb') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-type', content_type)
+            self.send_header('Content-Length', str(len(content)))
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(content)
+            print(f"[{time.strftime('%H:%M:%S')}] GET {self.path} -> 200 ({filename}, {len(content)} bytes)", flush=True)
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] ERROR reading {filename}: {e}", flush=True)
+            self._send_error(500, "Internal Server Error")
+
+    def _send_error(self, code, message):
+        """Send a plain-text error response"""
+        body = message.encode()
+        self.send_response(code)
+        self.send_header('Content-type', 'text/plain')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         """Handle POST requests"""
         if self.path == '/api/data':
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
-            
+
             try:
                 global current_data
                 current_data = json.loads(body.decode())
                 save_data(current_data)
-                
+
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": True}).encode())
-                print(f"✅ Data saved at {time.strftime('%H:%M:%S')}")
+                print(f"[{time.strftime('%H:%M:%S')}] POST /api/data -> 200 (data saved)", flush=True)
             except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ERROR in POST /api/data: {e}", flush=True)
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def do_OPTIONS(self):
         """Handle OPTIONS requests for CORS"""
         self.send_response(200)
@@ -110,41 +156,30 @@ class LCLHandler(SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-    
+
     def log_message(self, format, *args):
-        """Suppress default logging"""
-        return
+        """Use stdout logging instead of stderr default"""
+        print(f"[{time.strftime('%H:%M:%S')}] {format % args}", flush=True)
 
 def run_server():
     """Start the server"""
-    server_address = ('', PORT)
+    server_address = ('0.0.0.0', PORT)
     httpd = HTTPServer(server_address, LCLHandler)
-    
-    print("╔════════════════════════════════════════╗")
-    print("║  LCL - Level Challenge List Server     ║")
-    print("║  (Python Edition - No npm needed!)     ║")
-    print("╠════════════════════════════════════════╣")
-    print(f"║  🚀 Server running on:                 ║")
-    print(f"║  http://localhost:{PORT}                       ║")
-    print("║                                        ║")
-    print("║  📍 Open in all browsers:              ║")
-    print(f"║  Edge: http://localhost:{PORT}         ║")
-    print(f"║  Brave: http://localhost:{PORT}        ║")
-    print(f"║  Chrome: http://localhost:{PORT}       ║")
-    print("║                                        ║")
-    print("║  💾 Data file:                         ║")
-    print(f"║  {os.path.abspath(DATA_FILE)}")
-    print("║                                        ║")
-    print("║  ✅ All data is shared across browsers! ║")
-    print("║  Press Ctrl+C to stop server           ║")
-    print("╚════════════════════════════════════════╝\n")
-    
+
+    print("=" * 45, flush=True)
+    print("  LCL - Level Challenge List Server", flush=True)
+    print("=" * 45, flush=True)
+    print(f"  Listening on  : 0.0.0.0:{PORT}", flush=True)
+    print(f"  Working dir   : {os.getcwd()}", flush=True)
+    print(f"  Data file     : {os.path.abspath(DATA_FILE)}", flush=True)
+    print(f"  index.html    : {'FOUND' if os.path.exists('index.html') else 'MISSING'}", flush=True)
+    print("=" * 45, flush=True)
+    sys.stdout.flush()
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\n\n🛑 Server stopped")
-        print(f"✅ All data saved to: {os.path.abspath(DATA_FILE)}")
-        print("👋 Goodbye!")
+        print("\n[INFO] Server stopped", flush=True)
 
 if __name__ == '__main__':
     run_server()
