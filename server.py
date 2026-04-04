@@ -53,6 +53,16 @@ current_data = load_data()
 if not _data_file_existed:
     save_data(current_data)
 
+# Migration: remove the hardcoded "Stereo Madness" level (id=1) if it exists
+_levels_before = len(current_data.get("levels", []))
+current_data["levels"] = [
+    lvl for lvl in current_data.get("levels", [])
+    if not (str(lvl.get("id")) == "1" and lvl.get("name") == "Stereo Madness")
+]
+if len(current_data["levels"]) < _levels_before:
+    save_data(current_data)
+    print("[INFO] Removed hardcoded 'Stereo Madness' level from data file", flush=True)
+
 class LCLHandler(SimpleHTTPRequestHandler):
     """HTTP Request Handler with API support"""
 
