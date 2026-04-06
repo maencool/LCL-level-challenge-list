@@ -115,11 +115,47 @@ app.use(express.static(__dirname));
 
 // API Routes
 
-// GET all data
+// GET public data - safe for unauthenticated access (no passwords or admin flags)
+app.get('/api/public-data', async (req, res) => {
+    try {
+        const [levels, settings] = await Promise.all([
+            supabase.from('levels').select('id, name, level_id, youtube_url, thumbnail, difficulty, submitted_by, submitted_date').eq('status', 'approved').order('id'),
+            supabase.from('settings').select('theme, language, dark_background').limit(1).single()
+        ]);
+
+        const data = {
+            levels: levels.data || [],
+            settings: settings.data || { theme: 'dark', language: 'en', dark_background: true }
+        };
+
+        res.json(data);
+    } catch (error) {
+        console.error('❌ Error reading public data:', error);
+        res.status(500).json({ error: 'Failed to read data', details: error.message });
+    }
+});
+
+// GET all data - admin only (requires valid adminId query param)
 app.get('/api/data', async (req, res) => {
     try {
+        // Verify the requesting user is an admin
+        const { adminId } = req.query;
+        if (!adminId) {
+            return res.status(403).json({ error: 'Forbidden: admin authentication required' });
+        }
+
+        const { data: adminUser, error: adminError } = await supabase
+            .from('users')
+            .select('id, is_admin')
+            .eq('id', adminId)
+            .single();
+
+        if (adminError || !adminUser || !adminUser.is_admin) {
+            return res.status(403).json({ error: 'Forbidden: admin access required' });
+        }
+
         const [users, levels, pending, settings] = await Promise.all([
-            supabase.from('users').select('*'),
+            supabase.from('users').select('id, email, display_name, is_admin'),
             supabase.from('levels').select('*').eq('status', 'approved').order('id'),
             supabase.from('levels').select('*').eq('status', 'pending').order('submitted_date'),
             supabase.from('settings').select('*').limit(1).single()

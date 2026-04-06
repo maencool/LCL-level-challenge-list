@@ -145,11 +145,20 @@ const App = {
 
         // Add timestamp to bust cache
         const timestamp = new Date().getTime();
-        fetch(`${window.location.origin}/api/data?t=${timestamp}`)
+        fetch(`${window.location.origin}/api/public-data?t=${timestamp}`)
             .then(res => res.json())
             .then(data => {
-                Storage.cachedData = data;
-                localStorage.setItem(Storage.DATA_KEY, JSON.stringify(data));
+                // Merge public data (levels + settings) into the cached structure,
+                // preserving any locally-held users/pendingLevels
+                const current = Storage.getData();
+                const merged = {
+                    users: current.users || [],
+                    levels: data.levels || [],
+                    pendingLevels: current.pendingLevels || [],
+                    settings: data.settings || current.settings
+                };
+                Storage.cachedData = merged;
+                localStorage.setItem(Storage.DATA_KEY, JSON.stringify(merged));
                 this.renderLeaderboard();
                 this.renderPendingLevels();
                 this.renderManageLevels();
@@ -160,6 +169,7 @@ const App = {
                 this._isRefreshing = false;
             });
     },
+
 
     // Start auto-refresh interval
     startAutoRefresh() {

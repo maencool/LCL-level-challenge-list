@@ -2,30 +2,18 @@
 const Storage = {
     DATA_KEY: 'lcl_data',
     API_URL: `${window.location.origin}/api/data`,
+    PUBLIC_API_URL: `${window.location.origin}/api/public-data`,
     cachedData: null,
+
 
     // 🔧 DEBUG MODE (turn false in production)
     DEBUG: true,
 
-    // Default data structure
+
+    // Default data structure (no sensitive user data stored client-side)
     getDefaultData() {
         return {
-            users: [
-                {
-                    id: 'admin1',
-                    email: 'maencopra@gmail.com',
-                    displayName: 'Admin',
-                    password: 'maenissocool12345gGs',
-                    isAdmin: true
-                },
-                {
-                    id: 'admin2',
-                    email: 'Xennyplayz@gmail.com',
-                    displayName: 'Xennyplayz',
-                    password: 'xennyplayznona6755',
-                    isAdmin: true
-                }
-            ],
+            users: [],
 
             levels: [],
 
@@ -38,23 +26,25 @@ const Storage = {
         };
     },
 
-    // Initialize - Load from server
+    // Initialize - Load from public endpoint (no passwords or admin flags exposed)
     init() {
         console.log('🔧 Initializing Storage system...');
 
         const timestamp = new Date().getTime();
-        fetch(`${this.API_URL}?t=${timestamp}`, { method: 'GET' })
+        fetch(`${this.PUBLIC_API_URL}?t=${timestamp}`, { method: 'GET' })
             .then(res => res.json())
             .then(data => {
-                this.cachedData = data;
-                localStorage.setItem(this.DATA_KEY, JSON.stringify(data));
-                console.log('✅ Loaded data from server');
+                // Merge public data into a full data structure
+                const fullData = this.getDefaultData();
+                fullData.levels = data.levels || [];
+                fullData.settings = data.settings || fullData.settings;
 
-                if (this.DEBUG && data.users && Array.isArray(data.users)) {
-                    console.log(`📋 Users: ${data.users.length}`);
-                    data.users.forEach(u => {
-                        console.log(`   ├─ ${u.displayName}${u.isAdmin ? ' 🔑 ADMIN' : ''}`);
-                    });
+                this.cachedData = fullData;
+                localStorage.setItem(this.DATA_KEY, JSON.stringify(fullData));
+                console.log('✅ Loaded public data from server');
+
+                if (this.DEBUG) {
+                    console.log(`📋 Levels: ${fullData.levels.length}`);
                 }
             })
             .catch(err => {
@@ -71,6 +61,7 @@ const Storage = {
                 }
             });
     },
+
 
     // Get all data
     getData() {
@@ -92,6 +83,8 @@ const Storage = {
         this.cachedData = this.getDefaultData();
         return this.cachedData;
     },
+
+
 
     // Save to server AND localStorage
     saveData(data) {
