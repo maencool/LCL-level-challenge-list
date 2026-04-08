@@ -1,17 +1,21 @@
 {
   "name": "lcl",
   "version": "1.0.0",
+  "description": "LCL App",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
-  "dependencies": {
-    "express": "4.18.2",
-    "dotenv": "16.3.1",
-    "@supabase/supabase-js": "2.101.1"
-  },
   "engines": {
-    "node": ">=12.0.0"
+    "node": "18.x"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "bcrypt": "^5.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^8.0.0"
   }
 }
-
