@@ -1,3 +1,5 @@
+import Storage from './storage.js'; // Import the storage system
+
 // Authentication Management
 const Auth = {
     currentUser: null,
@@ -18,8 +20,10 @@ const Auth = {
             this.currentUser = Storage.getUserById(userId);
             if (this.currentUser) {
                 console.log(`✅ Auto-logged in: ${this.currentUser.displayName}`);
+                return this.currentUser;
             }
         }
+        return null;
     },
 
     async register(email, displayName, password) {
@@ -80,3 +84,5 @@ const Auth = {
 document.addEventListener('DOMContentLoaded', () => {
     Auth.init();
 });
+
+export default Auth; // Allow other files to use Auth
